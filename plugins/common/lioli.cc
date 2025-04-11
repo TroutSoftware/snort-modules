@@ -12,6 +12,11 @@
 #include <lioli_path.h>
 
 // Debug includes
+#include <perfetto.h>
+PERFETTO_DEFINE_CATEGORIES(
+perfetto::Category("trout_test").SetDescription("Sample trace"),
+perfetto::Category("trout_exclude").SetDescription("Sample trace"));
+
 
 namespace LioLi {
 namespace {
@@ -36,6 +41,7 @@ public:
 class LorthHelpers {
 public:
   static std::string escape2(const std::string &&in) {
+		TRACE_EVENT("trout_test", "string escape2", "string", in);
     std::string output;
     for (char c : in) {
       // Normal format chars are escaped C style
@@ -75,6 +81,7 @@ public:
 
   static std::string escape(const std::string &&in) {
     // Chars that should be escaped
+    TRACE_EVENT("trout_test", "org string escape", "string", in);
     const static std::string esc("\"\n\t\r");
 
     std::string::size_type spos = 0;
@@ -126,12 +133,14 @@ public:
 void Tree::Node::set_end(size_t new_end) { end = new_end; }
 
 void Tree::Node::add_as_child(const Node &node) {
+	TRACE_EVENT("trout_test", "add const child node");
   last_child_added = children.emplace_after(last_child_added, node);
   last_child_added->adjust(end);
   end = last_child_added->end;
 }
 
 void Tree::Node::add_as_child(Node &&node) {
+	TRACE_EVENT("trout_test", "add non-const child node");
   last_child_added = children.insert_after(last_child_added, std::move(node));
   last_child_added->adjust(end);
   end = last_child_added->end;
@@ -139,7 +148,7 @@ void Tree::Node::add_as_child(Node &&node) {
 
 // Copy version of append
 void Tree::Node::append(const Node &node) {
-
+TRACE_EVENT("trout_test", "append node by copy");
   // We only know how to merge node names, if one is null or they are equal
   if (node.my_name.size() == 0) {
     // Do nothing
@@ -160,6 +169,7 @@ void Tree::Node::append(const Node &node) {
 
 // Move version of append
 void Tree::Node::append(Node &&node) {
+	TRACE_EVENT("trout_test", "append node by move");
   // We only know how to merge node names, if one is null or they are equal
   if (node.my_name.size() == 0) {
     // Do nothing
@@ -224,6 +234,7 @@ Tree::Node::Node(std::string name) : my_name(name) {
 }
 
 void Tree::Node::adjust(size_t delta) {
+	TRACE_EVENT("trout_test", "node adjust");
   start += delta;
   end += delta;
 
@@ -234,6 +245,7 @@ void Tree::Node::adjust(size_t delta) {
 
 std::string Tree::Node::dump_string(const std::string &raw,
                                     unsigned level) const {
+TRACE_EVENT("trout_test", "dump string");
   std::string output;
   output.insert(0, level, '-');
 
@@ -251,6 +263,7 @@ std::string Tree::Node::dump_string(const std::string &raw,
 
 std::string Tree::Node::dump_lorth(const std::string &raw,
                                    unsigned level) const {
+TRACE_EVENT("trout_test", "dump lorth");																		 
   std::string output;
   std::string spacer;
   spacer.insert(0, level, ' ');
@@ -284,7 +297,7 @@ std::string Tree::Node::dump_lorth(const std::string &raw,
 
 std::string Tree::Node::dump_python(const std::string &raw, unsigned level,
                                     bool array_item) const {
-
+TRACE_EVENT("trout_test", "dump python");
   assert(my_name.size() >= 1); // A name must at least have 1 char
   bool is_array = (my_name[0] == '#');
   std::string output;
@@ -332,6 +345,7 @@ std::string Tree::Node::dump_python(const std::string &raw, unsigned level,
 }
 
 std::string Tree::Node::dump_binary(size_t delta, bool add_root_node) const {
+	TRACE_EVENT("trout_test", "dump binary");
   std::string output;
 
   if (add_root_node) {
@@ -399,10 +413,34 @@ std::string Tree::Node::dump_binary(size_t delta, bool add_root_node) const {
 }
 
 bool Tree::Node::is_valid(size_t start, size_t end) const {
+	
+	TRACE_EVENT("trout_test", "check node is valid", "node name", (my_name.length()?my_name.c_str():"empty"));
+	TRACE_EVENT("trout_test", "inside check node");
+
+	{
+		TRACE_EVENT("trout_test", "Trace a trace");
+		{
+			TRACE_EVENT("trout_exclude", "Excluded trace");
+		}
+
+	}
+
+	{
+		TRACE_EVENT("trout_test", "Trace a trace");
+		{
+			TRACE_EVENT("trout_test", "Included trace");
+		}
+
+	}
+
+
+	
   if (this->start < start || this->end > end) {
     return false;
   }
 
+{
+	TRACE_EVENT("trout_test", "inside check node - looping");
   size_t sp = this->start;
   for (auto &child : children) {
     if (!child.is_valid(sp, end)) {
@@ -410,7 +448,7 @@ bool Tree::Node::is_valid(size_t start, size_t end) const {
     }
     sp = child.end; // Next child can't have overlap with previous one
   }
-
+}
   return true;
 }
 

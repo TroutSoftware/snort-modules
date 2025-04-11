@@ -15,6 +15,9 @@
 #include "logger_stdout.h"
 
 // Debug includes
+#include <perfetto.h>
+PERFETTO_DEFINE_CATEGORIES(
+perfetto::Category("trout_test").SetDescription("Sample trace"));
 
 namespace logger_stdout {
 namespace {
@@ -75,6 +78,7 @@ public:
   }
 
   void operator<<(const LioLi::Tree &&tree) override {
+    TRACE_EVENT("trout_test", "Serializing to stdout");
     std::scoped_lock lock(mutex);
 
     std::cout << get_context().serialize(std::move(tree));

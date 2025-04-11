@@ -28,6 +28,30 @@
 #include "trout_netflow/trout_netflow.h"
 #include "trout_wizard/plugin_def.h"
 
+#include <perfetto.h>
+PERFETTO_DEFINE_CATEGORIES(
+  perfetto::Category("trout_test").SetDescription("Testing Perfetto"),
+  perfetto::Category("trout_exclude").SetDescription("Timing Perfetto"));
+
+PERFETTO_TRACK_EVENT_STATIC_STORAGE();
+
+class Perfetto_Tracer {
+  perfetto::TracingInitArgs args;
+public:
+  Perfetto_Tracer() {
+    args.backends |= perfetto::kInProcessBackend;
+    args.backends |= perfetto::kSystemBackend;
+    perfetto::Tracing::Initialize(args);
+
+    perfetto::TrackEvent::Register();
+
+    //TRACE_EVENT("trout_test", "In constructor");
+  }
+  
+  
+} p_tracer;
+
+
 // clang-format off
 SO_PUBLIC const snort::BaseApi *snort_plugins[] = {
   &alert_lioli::log_api.base,

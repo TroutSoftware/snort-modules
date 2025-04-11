@@ -16,6 +16,10 @@
 #include "logger_file.h"
 
 // Debug includes
+#include <perfetto.h>
+PERFETTO_DEFINE_CATEGORIES(
+perfetto::Category("trout_test").SetDescription("Sample trace"));
+
 
 namespace logger_file {
 namespace {
@@ -101,6 +105,8 @@ public:
   }
 
   void operator<<(const LioLi::Tree &&tree) override {
+		TRACE_EVENT("trout_test", "Serializing to file", "tree conten", tree.as_string().c_str());
+		//TRACE_EVENT("trout_test", "Serializing to file");
     std::scoped_lock lock(mutex);
 
     get_ofile() << get_context().serialize(std::move(tree));

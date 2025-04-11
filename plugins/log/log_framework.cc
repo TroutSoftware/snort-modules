@@ -6,6 +6,12 @@
 // Local includes
 #include "log_framework.h"
 
+// Debug includes
+#include <perfetto.h>
+PERFETTO_DEFINE_CATEGORIES(
+perfetto::Category("trout_test").SetDescription("Sample trace"));
+
+
 namespace LioLi {
 
 std::shared_ptr<Serializer> &Serializer::get_null_obj() {
@@ -58,7 +64,8 @@ std::mutex LogDB::mutex;
 std::map<std::string, std::shared_ptr<LogBase>> LogDB::db;
 
 bool LogDB::register_obj(std::string name, std::shared_ptr<LogBase> sptr) {
-  std::scoped_lock lock(mutex);
+	TRACE_EVENT("trout_test", "Building logging DB");
+  std::scoped_lock lock(mutex);  
   return db.emplace(name, sptr).second;
 }
 
