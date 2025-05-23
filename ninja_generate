@@ -6,8 +6,6 @@
 # for loops avoid creating a subshell
 # shellcheck disable=SC2013
 
-. ./envrc
-
 cat << EOF
 pd = $PD
 cflags = $CFLAGS -Wall -Wextra -std=c++2b -fPIC -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror=format-security
