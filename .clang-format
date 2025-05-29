@@ -1,0 +1,1 @@
+.clang_format_style": "{ BasedOnStyle: Google, BraceWrapping: { AfterFunction: false } }"

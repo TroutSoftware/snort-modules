@@ -2,37 +2,39 @@
 #define module_1d34881e
 
 // Snort includes
-
+#include <framework/counts.h>
+#include <framework/module.h>
 // System includes
+#include <iostream>
 
 // Global includes
 #include <log_framework.h>
 
-// Local includes
+#define ENABLE_INFERENCE
+//  Local includes
 
 namespace trout_wizard {
 
-struct Settings {
-  std::shared_ptr<LioLi::Logger> logger;
+class Settings;
 
-public:
-  std::string logger_name;
-  bool concatenate = false;
-  bool pack_data = false;
-  uint32_t split_size = 253;
-  std::string tag;
-
-  LioLi::Logger &get_logger();
+// This must match the s_pegs[] array
+struct PegCounts {
+  PegCount pkg_processed = 0;
+  PegCount srv_detected = 0;
 };
 
 class Module : public snort::Module {
   std::shared_ptr<Settings> settings;
 
   Module();
+  ~Module();
 
-  Usage get_usage() const override;
+  bool begin(const char *, int, snort::SnortConfig *) override;
+  bool end(const char *, int, snort::SnortConfig *) override;
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override;
+
+  Usage get_usage() const override;
 
   const PegInfo *get_pegs() const override;
 
@@ -42,7 +44,7 @@ class Module : public snort::Module {
 
 public:
   std::shared_ptr<Settings> get_settings();
-
+  PegCounts &get_peg_counts();
   static snort::Module *ctor() { return new Module(); }
   static void dtor(snort::Module *p) { delete p; }
 };

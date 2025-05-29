@@ -1,2 +1,4 @@
 inspector.cc
 module.cc
+settings.cc
+trigram.cc

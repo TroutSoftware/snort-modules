@@ -1,4 +1,5 @@
 // Snort includes
+#include <log/messages.h>
 #include <protocols/packet.h>
 #include <stream/stream_splitter.h>
 
@@ -29,6 +30,9 @@ public:
     udp,
     other,
   } base_protocol = BaseProtocol::other;
+
+  // flow map - <protocol,interested trigram>,count
+  std::map<std::pair<std::string, uint32_t>, int> flow_map;
 
 private:
   struct Cache {
@@ -217,7 +221,8 @@ public:
         if (client_cache.append(data, data_length, offset)) {
           flush();
         }
-      } else /* Must be from server */ {
+      } else /* Must be from server */
+      {
         if (server_cache.empty() && p->pkth) {
           server_cache.time_stamp = p->pkth->ts;
         }
@@ -227,21 +232,91 @@ public:
       }
     }
   }
-};
+#ifdef ENABLE_INFERENCE
+  std::string get_protocol(const uint8_t *data, size_t data_len,
+                           std::shared_ptr<Negative_cache> neg_cache,
+                           std::shared_ptr<Settings> settings) {
+    get_intresting_tgms(data, data_len, neg_cache, settings);
+
+    std::map<std::string, float> protocol_list;
+    for (auto fd : flow_map) {
+      for (auto &pd : settings->data_set) {
+        if (fd.first.first == pd->protocol) {
+          float v = ((float)fd.second / (float)pd->tgm_set.size());
+          if (protocol_list[pd->protocol] < v) {
+            protocol_list[pd->protocol] = v;
+          }
+        }
+      }
+    }
+    std::string f_protocol = "";
+    float maxProbability =
+        -std::numeric_limits<float>::infinity(); // Smallest possible value
+
+    for (const auto &[protocol, prob] : protocol_list) {
+      if (prob > maxProbability) {
+        maxProbability = prob;
+        f_protocol = protocol;
+      }
+    }
+    return f_protocol;
+  }
+
+  void get_intresting_tgms(const uint8_t *data, size_t len,
+                           std::shared_ptr<Negative_cache> neg_cache,
+                           std::shared_ptr<Settings> settings) {
+
+    if (len < 3U)
+      return;
+
+    for (size_t i = 0; i <= len - 3U; i++) {
+      uint32_t tgm = (static_cast<uint32_t>(data[i]) << 16) |
+                     (static_cast<uint32_t>(data[i + 1]) << 8) |
+                     (static_cast<uint32_t>(data[i + 2]));
+
+      if (neg_cache->test(tgm) || tgm == 0U) {
+        continue;
+      } else {
+        for (auto &item : settings->data_set) {
+          if (item->tgm_set.find(tgm) != item->tgm_set.end()) {
+            flow_map[{item->protocol, tgm}]++;
+          } else {
+            neg_cache->add(tgm);
+          }
+        }
+      }
+    }
+
+    return;
+  }
+
+#endif
+
+}; // wizard class
 
 using FlowData = Common::FlowData<WizardFlow>;
 
 void dump_pkt(bool from_client, snort::Packet *p, const uint8_t *data,
-              uint32_t data_length, std::shared_ptr<Settings> settings) {
+              uint32_t data_length, std::shared_ptr<Settings> settings,
+              std::shared_ptr<Negative_cache> neg_cache) {
   assert(p);
 
   FlowData *flow_data = (p->flow) ? FlowData::get_from_flow(p->flow) : nullptr;
 
   if (flow_data) {
-
     flow_data->set_settings(settings);
+#ifdef ENABLE_INFERENCE
+    if (settings->inference == true) {
+      std::string f_protocol =
+          flow_data->get_protocol(data, data_length, neg_cache, settings);
 
-    flow_data->process(from_client, p, data, data_length);
+      std::cout << "\n protocol derived: " << f_protocol << "\n";
+    } else {
+#endif
+      flow_data->process(from_client, p, data, data_length);
+#ifdef ENABLE_INFERENCE
+    }
+#endif
   } else {
     snort::WarningMessage("WARNING: trout_wizard unable to parse packet due to "
                           "missing flow, check your configuration");
@@ -252,6 +327,7 @@ void dump_pkt(bool from_client, snort::Packet *p, const uint8_t *data,
 
 class Splitter : public snort::StreamSplitter {
   std::shared_ptr<Settings> settings;
+  std::shared_ptr<Negative_cache> neg_cache;
 
   Status scan(snort::Packet *p,
               const uint8_t *data, // in order segment data as it arrives
@@ -260,7 +336,7 @@ class Splitter : public snort::StreamSplitter {
               uint32_t * /*fp*/    // flush point (offset) relative to data
               ) override {
 
-    dump_pkt(to_server(), p, data, len, settings);
+    dump_pkt(to_server(), p, data, len, settings, neg_cache);
 
     return SEARCH;
   }
@@ -270,19 +346,26 @@ class Splitter : public snort::StreamSplitter {
   unsigned max(snort::Flow *) override { return 32000; }
 
 public:
-  Splitter(std::shared_ptr<Settings> settings, bool c2s)
-      : StreamSplitter(c2s), settings(settings) {}
+  Splitter(std::shared_ptr<Settings> settings, bool c2s,
+           std::shared_ptr<Negative_cache> neg_cache)
+      : StreamSplitter(c2s), settings(settings), neg_cache(neg_cache) {}
 };
 
 void Inspector::eval(snort::Packet *p) {
 
-  dump_pkt(p->is_from_client(), p, p->data, p->dsize, module.get_settings());
+  dump_pkt(p->is_from_client(), p, p->data, p->dsize, settings, neg_cache);
 }
+
+Inspector::Inspector(Module &module)
+    : settings(module.get_settings()), pegs(module.get_peg_counts()),
+      neg_cache(std::make_shared<Negative_cache>()) {
+
+      };
 
 Inspector::~Inspector() {}
 
 snort::StreamSplitter *Inspector::get_splitter(bool c2s) {
-  return new Splitter(module.get_settings(), c2s);
+  return new Splitter(settings, c2s, neg_cache);
 }
 
 snort::Inspector *Inspector::ctor(snort::Module *module) {

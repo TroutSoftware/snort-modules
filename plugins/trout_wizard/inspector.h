@@ -11,19 +11,23 @@
 // Global includes
 
 // Local includes
+#include "settings.h"
+#include "trigram.h"
 
 // Debug includes
 
 namespace trout_wizard {
-
 class Module;
 
 class Inspector : public snort::Inspector {
 private:
-  Module &module;
+  std::shared_ptr<Settings> settings;
+  PegCounts &pegs;
+
+  std::shared_ptr<Negative_cache> neg_cache;
 
 public:
-  Inspector(Module &module) : module(module) { assert(&module); };
+  Inspector(Module &module);
   ~Inspector();
 
   void eval(snort::Packet *) override;

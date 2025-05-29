@@ -7,6 +7,7 @@ serializer_csv =  { item_separator = " ",
 logger_file = { serializer = 'serializer_csv' }
 
 trout_wizard = { tag = 'NA',
+                 inference = false,
                  logger = 'logger_file',
                  pack_data = false,
                  split_size = 253,
